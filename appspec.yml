@@ -1,0 +1,106 @@
+---
+- name: Configure AWS resources and deploy instances
+  tasks:
+    - name: Configure AWS provider for Ohio region
+      community.aws.aws_config:
+        region: us-east-2
+        alias: ohio
+
+    - name: Configure AWS provider for N. Virginia region
+      community.aws.aws_config:
+        region: us-east-1
+
+    - name: Get default VPC in primary region
+      community.aws.ec2_vpc_info:
+        default_vpc: true
+      register: primary_vpc
+
+    - name: Create primary security group
+      community.aws.ec2_group:
+        name: Primary-SG
+        description: Primary security group for VPC
+        vpc_id: "{{ primary_vpc.vpcs[0].id }}"
+        ingress_rules:
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: "0.0.0.0/0"
+          - proto: tcp
+            from_port: 80
+            to_port: 80
+            cidr_ip: "0.0.0.0/0"
+          - proto: tcp
+            from_port: 443
+            to_port: 443
+            cidr_ip: "0.0.0.0/0"
+        egress_rules:
+          - proto: "-1"
+            cidr_ip: "0.0.0.0/0"
+        tags:
+          - key: Name
+            value: Primary-SG
+
+    - name: Create primary instance
+      community.aws.ec2_instance:
+        ami: ami-067d1e60475437da2
+        instance_type: t2.micro
+        security_groups:
+          - "Primary-SG"
+        user_data: |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd.x86_64
+          systemctl start httpd.service
+          systemctl enable httpd.service
+          echo "Hello World from Primary Server" > /var/www/html/index.html
+        tags:
+          - key: Name
+            value: Primary_Server
+
+    - name: Get default VPC in Ohio region
+      community.aws.ec2_vpc_info:
+        default_vpc: true
+        region: us-east-2
+      register: secondary_vpc
+
+    - name: Create secondary security group
+      community.aws.ec2_group:
+        name: secondary_allow_ssh_http
+        description: Allow ssh http inbound traffic
+        vpc_id: "{{ secondary_vpc.vpcs[0].id }}"
+        ingress_rules:
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: "0.0.0.0/0"
+          - proto: tcp
+            from_port: 80
+            to_port: 80
+            cidr_ip: "0.0.0.0/0"
+          - proto: tcp
+            from_port: 443
+            to_port: 443
+            cidr_ip: "0.0.0.0/0"
+        egress_rules:
+          - proto: "-1"
+            cidr_ip: "0.0.0.0/0"
+        tags:
+          - key: Name
+            value: secondary_allow_ssh_http
+
+    - name: Create secondary instance
+      community.aws.ec2_instance:
+        ami: ami-036f5574583e16426
+        instance_type: t2.micro
+        security_groups:
+          - "secondary_allow_ssh_http"
+        user_data: |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd.x86_64
+          systemctl start httpd.service
+          systemctl enable httpd.service
+          echo "Hello World from Secondary Server" > /var/www/html/index.html
+        tags:
+          - key: Name
+            value: Secondary_Server
