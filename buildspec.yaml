@@ -3,25 +3,17 @@ version: 0.2
 phases:
   install:
     runtime-versions:
-      terraform: 1.0
-
-  pre_build:
+      python: 3.9
     commands:
-      - echo "Installing Terraform"
-      - terraform --version
-      - terraform init
+      - yum install -y python3-pip
+      - pip3 install ansible
+      - ansible-galaxy collection install community.aws
+      - ansible-galaxy collection install amazon.aws:==3.3.1 --force
+      - ansible-galaxy collection install amazon.aws
 
   build:
     commands:
-      - echo "Validating Terraform configuration"
-      - terraform validate
-      - echo "Planning Terraform changes"
-      - terraform plan -out=tfplan
-
-  post_build:
-    commands:
-      - echo "Applying Terraform changes"
-      - terraform apply -auto-approve tfplan
+      - ansible-playbook -i localhost appspec.yml -v
 
 artifacts:
-  files: tfplan
+  files: '**/*'
